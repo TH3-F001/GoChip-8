@@ -2,7 +2,7 @@ package main
 
 import (
 	// "github.com/TH3-F001/GoChip-8/pkg/display/ansi"
-	"github.com/TH3-F001/GoChip-8/pkg/display/ncurses"
+	"github.com/TH3-F001/GoChip-8/pkg/display/curses"
 )
 
 var memory [4096]byte = [4096]byte{}
@@ -18,7 +18,5 @@ func main() {
 	// for index, address :=what if i  range memory {
 	// 	fmt.Println(index, address)
 	// }
-	for {
-		ansi.Test()
-	}
+	curses.Initialize()
 }
