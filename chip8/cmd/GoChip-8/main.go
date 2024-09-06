@@ -1,7 +1,8 @@
 package main
 
-import "fmt"
-import "github.com/TH3-F001/GoChip-8/chip8/display/terminal"
+import (
+	"github.com/TH3-F001/GoChip-8/pkg/display/ansi"
+)
 
 var memory [4096]byte = [4096]byte{}
 var stack [16]uint16 = [16]uint16{}
@@ -13,9 +14,10 @@ var dt byte                 // Delay Timer
 var st byte                 // Sound Timer
 
 func main() {
-	for index, address := range memory {
-		fmt.Println(index, address)
+	// for index, address :=what if i  range memory {
+	// 	fmt.Println(index, address)
+	// }
+	for {
+		ansi.Test()
 	}
-
-	terminal.test_display()
 }
