@@ -1,0 +1,21 @@
+package main
+
+import "fmt"
+import "github.com/TH3-F001/GoChip-8/chip8/display/terminal"
+
+var memory [4096]byte = [4096]byte{}
+var stack [16]uint16 = [16]uint16{}
+var v [16]byte = [16]byte{} // Variable Registers
+var pc uint16               // Program Counter
+var sp uint16               // Stack Pointer
+var ir uint16               // Index Register
+var dt byte                 // Delay Timer
+var st byte                 // Sound Timer
+
+func main() {
+	for index, address := range memory {
+		fmt.Println(index, address)
+	}
+
+	terminal.test_display()
+}
