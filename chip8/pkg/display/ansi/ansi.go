@@ -8,7 +8,7 @@ func moveCursor(row, col int) {
 	fmt.Printf("\033[%d;%dH", row, col)
 }
 
-func Clear() {
+func Initialize() {
 	for i := 0; i < len(display); i++ {
 		for j := 0; j < len(display[i]); j++ {
 			display[i][j] = " "

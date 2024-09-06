@@ -1,6 +1,7 @@
 package display
 
 type Display interface {
-	Clear()
+	Initialize()
+	Terminate()
 	DrawPoint()
 }
