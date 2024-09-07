@@ -11,7 +11,7 @@ A Chip-8 interpreter written in go
 - Stack: Holds 16-bit memory addresses used to call and return from subroutines/functions
 - Delay Timer (DT): 8-bit timer - decremented at 60hz until it reaches 0
 - Sound Timer (ST): 8-bit timer that gives off a beeping sound as long as it isnt 0
-- 16 Variable Registers: 8-bit general-purpose regusters numbered 0-F (V0-VF)
+- 16 Variable Registers: 8-bit general-purpose registers numbered 0-F (V0-VF)
     - VF is also used as a flag register
 
 ---
