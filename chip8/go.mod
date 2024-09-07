@@ -1,4 +1,4 @@
-module github.com/TH3-F001/GoChip-8
+module github.com/TH3-F001/GoChip-8/chip8/cmd/GoChip-8
 
 go 1.22.6
 
