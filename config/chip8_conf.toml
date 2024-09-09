@@ -1,0 +1,5 @@
+displayType = ansi
+inputType = sdl
+fgColor = 32
+bgColor = 30
+instructionsPerSecond = 700

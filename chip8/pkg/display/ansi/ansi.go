@@ -20,8 +20,8 @@ func NewDisplay(width, height int, fgColor, bgColor int32) (aDisplay, error) { /
 		return aDisplay{}, fmt.Errorf("error in ansi/aDisplay.NewDisplay(): display must be at least 1px wide and 1px tall. supplied size: %dx%d", width, height)
 	}
 
-	if fgColor < 0 || fgColor >= 16 || bgColor < 0 || bgColor >= 16 {
-		return aDisplay{}, fmt.Errorf("error in ansi/aDisplay.NewDisplay(): aDisplay only supports colors between 0 and 15. supplied colors: fg=%d, bg=%d", fgColor, bgColor)
+	if fgColor < 0 || fgColor >= 255 || bgColor < 0 || bgColor >= 255 {
+		return aDisplay{}, fmt.Errorf("error in ansi/aDisplay.NewDisplay(): aDisplay only supports colors between 0 and 255. supplied colors: fg=%d, bg=%d", fgColor, bgColor)
 	}
 
 	pxs := make([][]rune, height)
