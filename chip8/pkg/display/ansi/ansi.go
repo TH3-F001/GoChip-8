@@ -9,7 +9,7 @@ const on rune = '█'
 const off rune = ' '
 
 type aDisplay struct {
-	pixels [][]rune
+	Pixels [][]rune
 	fg     int32
 	bg     int32
 }
@@ -31,16 +31,19 @@ func NewDisplay(width, height int, fgColor, bgColor int32) (aDisplay, error) { /
 		}
 	}
 
+	// hide cursor while the display is active, make it visible on termination
+	fmt.Print("\033[?25l")
+
 	return aDisplay{pxs, fgColor, bgColor}, nil
 }
 
-// Sets a pixel in the aDisplay.pixels array to on or off given row and column coordinates
+// Sets a pixel in the aDisplay.Pixels array to on or off given row and column coordinates
 func (d *aDisplay) SetPixel(row, col int, lit bool) error { // ✅
-	if row < 0 || row >= len(d.pixels) || col < 0 || col >= len(d.pixels[row]) {
+	if row < 0 || row >= len(d.Pixels) || col < 0 || col >= len(d.Pixels[row]) {
 		return errors.New("error in ansi/aDisplay.setpixel(): display coordinates out of bounds")
 	}
 
-	px := &d.pixels[row][col]
+	px := &d.Pixels[row][col]
 	if lit {
 		*px = on
 	} else {
@@ -49,15 +52,15 @@ func (d *aDisplay) SetPixel(row, col int, lit bool) error { // ✅
 	return nil
 }
 
-// Refreshes the display to reflect the contents of display.pixels (does notpackage ansi
+// Refreshes the display to reflect the contents of display.Pixels (does notpackage ansi
 func (d aDisplay) Refresh() error {
-	if len(d.pixels) <= 0 || len(d.pixels[0]) <= 0 {
-		return fmt.Errorf("error in ansi/aDisplay.Refresh(): display size is not in displayable bounds. display size: %dx%d, expected values over zero.", len(d.pixels[0]), len(d.pixels))
+	if len(d.Pixels) <= 0 || len(d.Pixels[0]) <= 0 {
+		return fmt.Errorf("error in ansi/aDisplay.Refresh(): display size is not in displayable bounds. display size: %dx%d, expected values over zero.", len(d.Pixels[0]), len(d.Pixels))
 	}
-	for row := 0; row < len(d.pixels); row++ {
-		for col := 0; col < len(d.pixels[row]); col++ {
+	for row := 0; row < len(d.Pixels); row++ {
+		for col := 0; col < len(d.Pixels[row]); col++ {
 			moveCursor(row, col)
-			fmt.Print(d.pixels[row][col])
+			fmt.Print(d.Pixels[row][col])
 		}
 		fmt.Print("\n")
 	}
@@ -65,6 +68,8 @@ func (d aDisplay) Refresh() error {
 }
 
 func (d aDisplay) Terminate() error {
+	// make the cursor visible
+	fmt.Print("\033[?25h")
 	return nil
 }
 

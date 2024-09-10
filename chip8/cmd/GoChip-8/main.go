@@ -44,11 +44,6 @@ var screen display.Display
 func getConfigPath() string {
 	configPath := ""
 
-	// defer takes a snapshot of config path, so i had to use an anonymous function to make it more dynamic
-	defer func() {
-		fmt.Println("\tFound configuration at:", configPath)
-	}()
-
 	if path, exists := os.LookupEnv("CHIP_8_CONF_PATH"); exists {
 		if _, err := os.Stat(path); err == nil {
 			configPath = path
@@ -102,7 +97,6 @@ func loadConfig(path string) Config {
 	}
 	return conf
 }
-
 //#endregion
 
 func loadDefaultFont(config Config) {
@@ -151,17 +145,24 @@ func loadDefaultFont(config Config) {
 
 }
 
+func mainLoop() {
+	
+}
+
 func main() {
 	fmt.Println("Initializing GoChip-8...")
 
 	fmt.Println("\tLoading Config...")
 	confPath := getConfigPath()
+	fmt.Println("\t\tFound configuration at:", confPath)
 	conf := loadConfig(confPath)
 	fmt.Println("\t\tConfig Loaded.")
 
 	fmt.Println("\tLoading Font...")
 	loadDefaultFont(conf)
-	fmt.Println("\t\tDone.")
+	fmt.Println("\t\tFont Loaded.")
+
+	
 
 	// // Create Display
 	// screen, err := ansi.NewDisplay(64, 32, 30, 33)
