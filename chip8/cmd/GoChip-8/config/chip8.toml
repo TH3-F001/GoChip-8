@@ -1,0 +1,6 @@
+displayType = "ansi"
+inputType = "sdl"
+defaultFont = "chip48"
+fgColor = 32
+bgColor = 30
+instructionsPerSecond = 700
