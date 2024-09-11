@@ -97,6 +97,7 @@ func loadConfig(path string) Config {
 	}
 	return conf
 }
+
 //#endregion
 
 func loadDefaultFont(config Config) {
@@ -146,7 +147,7 @@ func loadDefaultFont(config Config) {
 }
 
 func mainLoop() {
-	
+
 }
 
 func main() {
@@ -161,8 +162,6 @@ func main() {
 	fmt.Println("\tLoading Font...")
 	loadDefaultFont(conf)
 	fmt.Println("\t\tFont Loaded.")
-
-	
 
 	// // Create Display
 	// screen, err := ansi.NewDisplay(64, 32, 30, 33)
