@@ -11,6 +11,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/TH3-F001/GoChip-8/chip8/pkg/display"
+	"github.com/TH3-F001/GoChip-8/chip8/pkg/display"
 	// "github.com/TH3-F001/GoChip-8/pkg/display/curses"
 )
 

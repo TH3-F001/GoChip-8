@@ -1,4 +1,4 @@
-package sdlInput
+package scancodes
 
 import (
 	"fmt"
