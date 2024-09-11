@@ -1,4 +1,4 @@
-package ansi
+package vanillaio
 
 import (
 	"errors"
@@ -70,9 +70,23 @@ func (d aDisplay) Refresh() error {
 func (d aDisplay) Terminate() error {
 	// make the cursor visible
 	fmt.Print("\033[?25h")
+	return nilgithub.com/gdamore/tcel
+func moveCursor(row, col int) {
+	fmt.Printf("\033[%d;%dH", row, col)
+}
+
+type VanillaIO struct{}
+
+func (VanillaIO) Initialize() error {
 	return nil
 }
 
-func moveCursor(row, col int) {
-	fmt.Printf("\033[%d;%dH", row, col)
+func (VanillaIO) Listen() byte {
+	for {
+
+	}
+}
+
+func (VanillaIO) Terminate() error {
+	return nil
 }

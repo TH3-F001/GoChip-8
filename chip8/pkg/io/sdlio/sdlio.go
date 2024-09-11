@@ -1,5 +1,6 @@
-package scancodes
+package sdlio
 
+// NOTE: This package requires that libsdl2 is installed
 import (
 	"fmt"
 
@@ -8,21 +9,31 @@ import (
 
 type SdlInput struct{}
 
-func Initialize() error {
-	if err := sdl.Init(uint32(sdl.INIT_EVENTS)); err != nil {
+var window *sdl.Window
+
+func (SdlInput) Initialize() error {
+	if err := sdl.Init(uint32(sdl.INIT_EVERYTHING)); err != nil {
 		return err
 	}
+
+	win, err := sdl.CreateWindow("Keyboard Listener", int32(sdl.WINDOWPOS_UNDEFINED), int32(sdl.WINDOWPOS_UNDEFINED), 800, 600, uint32(sdl.WINDOW_SHOWN))
+	if err != nil {
+		return err
+	}
+	window = win
 	return nil
 }
 
-func Listen() byte {
+func (SdlInput) Listen() byte {
 	active := true
 	var result byte = 255
 	var event sdl.Event
 	for active {
-		for event = sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
+		fmt.Println("doom")
+		for event = sdl.WaitEvent(); event != nil; event = sdl.PollEvent() {
+			fmt.Println(event)
 			if keyboardEvent, ok := event.(*sdl.KeyboardEvent); ok {
-				fmt.Println(keyboardEvent.Keysym.Scancode)
+
 				switch int(keyboardEvent.Keysym.Scancode) {
 
 				case 0x82:
@@ -62,15 +73,18 @@ func Listen() byte {
 					continue
 				}
 				if result != 255 {
-					active = false
+					return result
 				}
+			} else {
+				fmt.Println("not okay")
 			}
 		}
 	}
 	return result
 }
 
-func Terminate() error {
+func (SdlInput) Terminate() error {
+	window.Destroy()
 	sdl.Quit()
 	return nil
 }

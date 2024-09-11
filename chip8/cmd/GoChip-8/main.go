@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/TH3-F001/GoChip-8/chip8/pkg/display"
-	"github.com/TH3-F001/GoChip-8/chip8/pkg/display"
+	"github.com/TH3-F001/GoChip-8/chip8/pkg/io"
+	"github.com/TH3-F001/GoChip-8/chip8/pkg/io/tcellio"
 	// "github.com/TH3-F001/GoChip-8/pkg/display/curses"
 )
 
@@ -164,6 +164,12 @@ func main() {
 	loadDefaultFont(conf)
 	fmt.Println("\t\tFont Loaded.")
 
+	fmt.Println("Initializing I/O...")
+	if err := scancodes.Initialize(); err != nil {
+		log.Fatal(err)
+	}
+	key := scancodes.Listen()
+	fmt.Println(key)
 	// // Create Display
 	// screen, err := ansi.NewDisplay(64, 32, 30, 33)
 	// if err != nil {
