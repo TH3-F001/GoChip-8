@@ -1,29 +1,47 @@
 package tcellio
 
-import "github.com/gdamore/tcell"
+import (
+	"fmt"
 
-type Tcellio struct {
-	Pixels [][]rune
+	"github.com/gdamore/tcell"
+)
+
+type TcellIO struct {
+	Pixels [][]bool
 	fg     int32
 	bg     int32
+	screen tcell.Screen
 }
 
-func (io *Tcellio) Initialize(int, int, int32, int32) (Tcellio, error) {
-	return Tcellio{}, nil
+func (TcellIO) New(width, height byte, fgColor, bgColor int32) (*TcellIO, error) {
+	screen, err := tcell.NewScreen()
+	if err != nil {
+		return &TcellIO{}, fmt.Errorf("error in tcellio/Initialize(): %w", err)
+	}
+
+	pxs := make([][]bool, height)
+	for i := range pxs {
+		for j := byte(0); j <= width; j++ {
+			pxs[i][j] = false
+		}
+	}
+	tc := TcellIO{pxs, fgColor, bgColor, screen}
+
+	return &tc, nil
 }
 
-func (io *Tcellio) SetPixel(int, int, bool) error {
+func (io *TcellIO) SetPixel(int, int, bool) error {
 	return nil
 }
 
-func (io Tcellio) Listen() (byte, error) {
+func (io *TcellIO) Refresh() error {
+	return nil
+}
+
+func (io TcellIO) Listen() (byte, error) {
 	return 0x0a, nil
 }
 
-func (io Tcellio) Terminate() error {
+func (io TcellIO) Terminate() error {
 	return nil
 }
-
-
-
-

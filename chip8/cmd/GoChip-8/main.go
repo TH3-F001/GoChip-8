@@ -11,8 +11,10 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/TH3-F001/GoChip-8/chip8/pkg/io"
+	"github.com/TH3-F001/GoChip-8/chip8/pkg/io/sdlio"
 	"github.com/TH3-F001/GoChip-8/chip8/pkg/io/tcellio"
-	// "github.com/TH3-F001/GoChip-8/pkg/display/curses"
+	"github.com/TH3-F001/GoChip-8/chip8/pkg/io/vanillio"
+
 )
 
 //go:embed config/chip8.toml
@@ -39,7 +41,8 @@ var ir uint16               // Index Register
 var dt byte                 // Delay Timer
 var st byte                 // Sound Timer
 
-var screen display.Display
+const width byte = 64
+const height byte = 32
 
 // #region Configuration
 func getConfigPath() string {
@@ -121,9 +124,9 @@ func loadDefaultFont(config Config) {
 	}
 
 	fontString := string(rawFontData)
+	segments := strings.Split(fontString, "0x")
 	fontStringArr := make([]string, 0)
 
-	segments := strings.Split(fontString, "0x")
 	for _, seg := range segments {
 		lines := strings.Split(seg, "\n")
 		for _, line := range lines {
@@ -147,6 +150,32 @@ func loadDefaultFont(config Config) {
 
 }
 
+func createIo(conf Config) (io.IO, error) {
+	var io io.IO
+	var err error
+	switch conf.DisplayType {
+	case "tcellio", "tcell", "tui":
+		io, err = tcellio.TcellIO{}.New(width, height, conf.FgColor, conf.BgColor)
+		if err != nil {
+			log.Fatal("Fatal: Failed to Create new TcellIO instance", err)
+		}
+	case "vanilla", "terminal", "term":
+		io, err = vanillio.VanillaIO{}.New(width, height, conf.FgColor, conf.BgColor)
+		if err != nil {
+			log.Fatal("Fatal: Failed to Create new VanillaIO instance", err)
+		}
+	case "sdl", "graphical", "gui": 
+		io, err = sdlio.SdlIO{}.New(width, height, conf.FgColor, conf.BgColor)
+		if err != nil {
+			log.Fatal("Fatal: Failed to Create new VanillaIO instance", err)
+		}
+
+	default:
+		log.Fatal("Fatal: Failed to Create new IO instance: Invalid ioType")
+	}
+	return io, nil
+}
+
 func mainLoop() {
 
 }
@@ -165,11 +194,12 @@ func main() {
 	fmt.Println("\t\tFont Loaded.")
 
 	fmt.Println("Initializing I/O...")
-	if err := scancodes.Initialize(); err != nil {
-		log.Fatal(err)
+	io, err := createIo(conf)
+	if err != nil {
+		log.Fatal("Fatal: Failed to create IO instance")
 	}
-	key := scancodes.Listen()
-	fmt.Println(key)
+	io.Listen()
+
 	// // Create Display
 	// screen, err := ansi.NewDisplay(64, 32, 30, 33)
 	// if err != nil {

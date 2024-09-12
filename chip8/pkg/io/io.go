@@ -5,8 +5,9 @@ package io
 // at the end of the day, code doesnt always reflect reality.
 
 type IO interface {
-	Initialize(int, int, int32, int32) (IO, error)
+	
 	SetPixel(int, int, bool) error
-	Listen() byte
+	Refresh() error
+	Listen() (byte, error)
 	Terminate() error
 }

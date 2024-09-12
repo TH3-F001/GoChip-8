@@ -7,24 +7,37 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-type SdlInput struct{}
+type SdlIO struct {
+	Pixels [][]bool
+	fg     int32
+	bg     int32
+	window *sdl.Window
+}
 
-var window *sdl.Window
-
-func (SdlInput) Initialize() error {
+func New(width, height byte, fgColor, bgColor int32) (*SdlIO, error) {
+	result := SdlIO{}
 	if err := sdl.Init(uint32(sdl.INIT_EVERYTHING)); err != nil {
-		return err
+		return &result, err
 	}
 
 	win, err := sdl.CreateWindow("Keyboard Listener", int32(sdl.WINDOWPOS_UNDEFINED), int32(sdl.WINDOWPOS_UNDEFINED), 800, 600, uint32(sdl.WINDOW_SHOWN))
 	if err != nil {
-		return err
+		return &result, err
 	}
-	window = win
+
+	result.window = win
+	return &result, nil
+}
+
+func (*SdlIO) Refresh() error {
 	return nil
 }
 
-func (SdlInput) Listen() byte {
+func SetPixel(row, col int, lit bool) error {
+	return nil
+}
+
+func (*SdlIO) Listen() byte {
 	active := true
 	var result byte = 255
 	var event sdl.Event
@@ -83,8 +96,8 @@ func (SdlInput) Listen() byte {
 	return result
 }
 
-func (SdlInput) Terminate() error {
-	window.Destroy()
+func (io *SdlIO) Terminate() error {
+	io.window.Destroy()
 	sdl.Quit()
 	return nil
 }

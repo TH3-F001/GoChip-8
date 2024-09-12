@@ -1,5 +1,4 @@
-displayType = "ansi"
-inputType = "sdl"
+ioType = "tcellio"
 defaultFont = "chip48"
 fgColor = 32
 bgColor = 30
