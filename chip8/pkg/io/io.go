@@ -5,7 +5,7 @@ package io
 // at the end of the day, code doesnt always reflect reality.
 
 type IO interface {
-	
+	GetPixels() *[][]bool
 	SetPixel(int, int, bool) error
 	Refresh() error
 	Listen() (byte, error)

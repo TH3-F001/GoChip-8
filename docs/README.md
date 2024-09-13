@@ -22,6 +22,7 @@ A Chip-8 interpreter written in go
 - All memory is writable
 - Typically the Chip-8 interpreter was stred form memory address 000 to 1FF, and the Chip-8 Program was expected to be loaded in after it starting at memory address 200
     - Best practice is to leave this initial space empty except for the font
+- 
 
 ## Display
 - W64px x H32px

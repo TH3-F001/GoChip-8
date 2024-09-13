@@ -1,5 +1,5 @@
-ioType = "tcellio"
-defaultFont = "chip48"
-fgColor = 32
-bgColor = 30
-instructionsPerSecond = 700
+IOType = "tcellio"
+DefaultFont = "chip48"
+FgColor = 0xFFB000
+BgColor = 0x141414
+InstructionsPerSecond = 700

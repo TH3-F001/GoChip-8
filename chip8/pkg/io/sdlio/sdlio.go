@@ -9,12 +9,12 @@ import (
 
 type SdlIO struct {
 	Pixels [][]bool
-	fg     int32
-	bg     int32
+	fg     uint32
+	bg     uint32
 	window *sdl.Window
 }
 
-func New(width, height byte, fgColor, bgColor int32) (*SdlIO, error) {
+func New(width, height byte, fgColor, bgColor uint32) (*SdlIO, error) {
 	result := SdlIO{}
 	if err := sdl.Init(uint32(sdl.INIT_EVERYTHING)); err != nil {
 		return &result, err
@@ -29,15 +29,19 @@ func New(width, height byte, fgColor, bgColor int32) (*SdlIO, error) {
 	return &result, nil
 }
 
+func (io SdlIO) GetPixels() *[][]bool {
+	return &io.Pixels
+}
+
+func (*SdlIO) SetPixel(row, col int, lit bool) error {
+	return nil
+}
+
 func (*SdlIO) Refresh() error {
 	return nil
 }
 
-func SetPixel(row, col int, lit bool) error {
-	return nil
-}
-
-func (*SdlIO) Listen() byte {
+func (*SdlIO) Listen() (byte, error) {
 	active := true
 	var result byte = 255
 	var event sdl.Event
@@ -86,14 +90,14 @@ func (*SdlIO) Listen() byte {
 					continue
 				}
 				if result != 255 {
-					return result
+					return result, nil
 				}
 			} else {
 				fmt.Println("not okay")
 			}
 		}
 	}
-	return result
+	return result, nil
 }
 
 func (io *SdlIO) Terminate() error {

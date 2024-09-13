@@ -5,16 +5,13 @@ import (
 	"fmt"
 )
 
-const on rune = '█'
-const off rune = ' '
-
 type VanillaIO struct {
-	Pixels [][]rune
-	fg     int32
-	bg     int32
+	Pixels [][]bool
+	fg     uint32
+	bg     uint32
 }
 
-func New(width, height byte, fgColor, bgColor int32) (*VanillaIO, error) {
+func New(width, height byte, fgColor, bgColor uint32) (*VanillaIO, error) {
 	if width <= 0 || height <= 0 {
 		return &VanillaIO{}, fmt.Errorf("error in ansi/VanillaIO.NewDisplay(): display must be at least 1px wide and 1px tall. supplied size: %dx%d", width, height)
 	}
@@ -23,10 +20,10 @@ func New(width, height byte, fgColor, bgColor int32) (*VanillaIO, error) {
 		return &VanillaIO{}, fmt.Errorf("error in ansi/VanillaIO.NewDisplay(): VanillaIO only supports colors between 0 and 255. supplied colors: fg=%d, bg=%d", fgColor, bgColor)
 	}
 
-	pxs := make([][]rune, height)
+	pxs := make([][]bool, height)
 	for i := range pxs {
 		for j := byte(0); j <= width; j++ {
-			pxs[i][j] = off
+			pxs[i][j] = false
 		}
 	}
 
@@ -36,6 +33,10 @@ func New(width, height byte, fgColor, bgColor int32) (*VanillaIO, error) {
 	return &VanillaIO{pxs, fgColor, bgColor}, nil
 }
 
+func (io VanillaIO) GetPixels() *[][]bool {
+	return &io.Pixels
+}
+
 func (io *VanillaIO) SetPixel(row, col int, lit bool) error {
 	if row < 0 || row >= len(io.Pixels) || col < 0 || col >= len(io.Pixels[row]) {
 		return errors.New("error in ansi/VanillaIO.setpixel(): display coordinates out of bounds")
@@ -43,9 +44,9 @@ func (io *VanillaIO) SetPixel(row, col int, lit bool) error {
 
 	px := &io.Pixels[row][col]
 	if lit {
-		*px = on
+		*px = true
 	} else {
-		*px = off
+		*px = false
 	}
 	return nil
 }
