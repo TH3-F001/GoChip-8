@@ -8,12 +8,14 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/TH3-F001/GoChip-8/chip8/pkg/io"
 	"github.com/TH3-F001/GoChip-8/chip8/pkg/io/sdlio"
 	"github.com/TH3-F001/GoChip-8/chip8/pkg/io/tcellio"
 	"github.com/TH3-F001/GoChip-8/chip8/pkg/io/vanillaio"
+	"github.com/TH3-F001/gotoolshed/stack"
 )
 
 //go:embed config/chip8.toml
@@ -31,7 +33,7 @@ type Config struct {
 }
 
 var memory [4096]byte = [4096]byte{}
-var stack [16]uint16 = [16]uint16{}
+var stk *stack.Stack[uint16] = stack.New[uint16](16)
 var v [16]byte = [16]byte{} // Variable Registers
 var pc uint16               // Program Counter
 var sp uint16               // Stack Pointer
@@ -176,44 +178,35 @@ func createIo(conf Config) (io.IO, error) {
 
 //#endregion
 
-// #region Instructions
-// op-code 00E0 - clears the screen
-
-//#endregion
-
-
-func mainLoop(inout io.IO, conf Config) {
-	//Fetch
-	// Get the first byte, shift it to the left of the double, and then drop in the next byte with an or
-	// see docs/visualizations/opcode-fetch.png
-	opCode := uint16(memory[pc])<<8 | uint16(memory[pc+1])
-	pc += 2
-
-	var nibbles [4]uint16 = [4]uint16{
-		(uint16(0xF000) & opCode) >> 12,
-		(uint16(0x0F00) & opCode) >> 8,
-		(uint16(0x00F0) & opCode) >> 4,
-		(uint16(0x000F) & opCode),
+// Returns a byte of a chip8 opcode as defined by index. index may only be values 0 and 1. all other values are out of bounds
+func getOpcodeByte(opcode uint16, index byte) byte {
+	switch index {
+		case 0:
+			return byte((0xFF00 & opcode) >> 8)
+		case 1:
+			return byte((0x00FF & opcode))
+		default:
+			log.Fatal("Fatal: Attempt to access opcode byte is out of bounds at index", index)
 	}
-
-	// Decode and Execute
-	switch nibbles[0] {
-	case 0x0:
-		if opCode == 0x00E0 {	// CLS
-			px := *(inout.GetPixels())
-			for i := range px {
-				for j := range (px)[i] {
-					inout.SetPixel(j, i, false)
-				}
-			}
-			inout.Refresh()
-		}
-	case 0x1:	// JMP
-		pc = opCode & 0x0FFF
-	}
-
+	return 0
 }
 
+// Returns a nibble of a chip8 opcode as defined by index. index may only be a value between 0 and 3. all other values are out of bounds.
+func getOpcodeNibble(opcode uint16, index byte) byte {
+	switch index {
+		case 0:
+			return byte((0xF000 & opcode) >> 12)
+		case 1:
+			return byte((0x0F00 & opcode) >> 8)
+		case 2:
+			return byte((0x0F00 & opcode) >> 4)
+		case 3:
+			return byte((0x000F & opcode))
+		default:
+			log.Fatal("Fatal: Attempt to access opcode nibble is out of bounds at index", index)
+	}
+	return 0
+}
 
 func main() {
 	var inout io.IO
@@ -226,6 +219,8 @@ func main() {
 	confPath := getConfigPath()
 	fmt.Println("\t\tFound configuration at:", confPath)
 	conf := loadConfig(confPath)
+	fmt.Println("\t\tSetting instruction Delay...")
+	delay := time.Second / time.Duration(conf.InstructionsPerSecond)
 	fmt.Println("\t\tConfig Loaded.")
 
 	fmt.Println("\tLoading Font...")
@@ -238,19 +233,144 @@ func main() {
 		log.Fatal("Fatal: Failed to create IO instance")
 	}
 
+
 	// Main Loop
 	for {
+		// Delay execution to mimic instructions per second
+		time.Sleep(delay)
 
-		
-		inout.Refresh()
-		input, err := inout.Listen()
-		if err != nil && input == 255 {
-			os.Exit(0)
+		// Fetch (see docs/visualizations/opcode-fetch.png)
+		opcode := uint16(memory[pc])<<8 | uint16(memory[pc+1])
+		pc += 2
+		firstNibble := getOpcodeNibble(opcode, 0)
+
+		// Decode and Execute
+		switch firstNibble {
+			case 0x0:
+				lastByte := getOpcodeByte(opcode, 1)
+				if lastByte == 0xE0 {								// 00E0 - CLS (clear screen)
+					px := *(inout.GetPixels())
+					for i := range px {
+						for j := range (px)[i] {
+							inout.SetPixel(j, i, false)
+						}
+					}
+					inout.Refresh()
+				} else if lastByte == 0xEE {							// 00EE - RET (pop the top value from stack and set pc to that value )
+					pc, _ = stk.Pop()
+				}
+
+			case 0x1:										// 1nnn - JP addr (move pc to address nnn)
+				pc = opcode & 0x0FFF
+
+			case 0x2:										// 2nnn - CALL addr (save pc to stack then set it to nnn)
+				stk.Push(pc)
+				pc = opcode & 0x0FFF
+
+			case 0x3:										// 3xnn - SE Vx, byte (skip next instruction if V[x] is equal to nn)
+				vIndex := getOpcodeNibble(opcode, 1)
+				secondByte := getOpcodeByte(opcode, 1)
+				if v[vIndex] == secondByte {
+					pc += 2
+				}
+
+			case 0x4:										// 4xnn - SNE Vx, byte (skip next instruction if V[x] is not equal to nn)
+				vIndex := getOpcodeNibble(opcode, 1)
+				secondByte := getOpcodeByte(opcode, 1)
+				if v[vIndex] != secondByte {
+					pc += 2
+				}
+
+			case 0x5:										// 5xy0 - SE Vx, Vy (skip next instruction if V[x] is equal to V[y])
+				xIndex := getOpcodeNibble(opcode, 1)
+				yIndex := getOpcodeNibble(opcode, 2)
+				if v[xIndex] == v[yIndex] {
+					pc += 2
+				}
+
+			case 0x6:										// 6xnn - LD Vx, byte (load the value nn into V[x])
+				vIndex := getOpcodeNibble(opcode, 1)
+				val := getOpcodeByte(opcode, 1)
+				v[vIndex] = val
+
+			case 0x7:										// 7xnn - ADD Vx, byte (adds the value of nn to value of V[x] and stores it back in to V[x])
+				vIndex := getOpcodeNibble(opcode, 1)
+				val := getOpcodeByte(opcode, 1)
+				v[vIndex] += val
+
+			case 0x8:
+				lastNibble := getOpcodeNibble(opcode, 3)
+				switch lastNibble {
+					case 0x0:								// 8xy0 - LD Vx, Vy (loads the value of V[y] into V[x])
+						xIndex := getOpcodeNibble(opcode, 1)
+						yIndex := getOpcodeNibble(opcode, 2)
+						v[xIndex] = v[yIndex]
+
+					case 0x1:								// 8xy1 - OR Vx, Vy (sets V[x] to the result of a binary OR between V[x] and V[y])
+						xIndex := getOpcodeNibble(opcode, 1)
+						yIndex := getOpcodeNibble(opcode, 2)
+						v[xIndex] = v[xIndex] | v[yIndex]
+
+					case 0x2:								// 8xy2 - AND Vx, Vy (sets V[x] to the result of a binary AND between V[x] and V[y])
+							xIndex := getOpcodeNibble(opcode, 1)
+							yIndex := getOpcodeNibble(opcode, 2)
+							v[xIndex] = v[xIndex] & v[yIndex]
+
+
+					case 0x3:								// 8xy3 - XOR Vx, Vy (sets V[x] to the result of a binary XOR between V[x] and V[y])
+						xIndex := getOpcodeNibble(opcode, 1)
+						yIndex := getOpcodeNibble(opcode, 2)
+						v[xIndex] = v[xIndex] ^ v[yIndex]
+
+					case 0x4:								// 8xy4 - ADD Vx, Vy (sets V[x] to the value of V[x] + V[y], and sets V[F] to 1 if theres an overflow, else sets it to zero)
+						xIndex := getOpcodeNibble(opcode, 1)
+						yIndex := getOpcodeNibble(opcode, 2)
+						sum := v[xIndex] + v[yIndex]
+						if sum < v[xIndex] {
+							v[0xF] = 1
+						} else {
+							v[0xF] = 0
+						}
+						v[xIndex] = sum
+					case 0x5: 								// 8xy5 - SUB Vx, Vy (sets V[x] to V[x] - V[y]. V[F] is set to 0 if an underflow occured, else 1)
+						xIndex := getOpcodeNibble(opcode, 1)
+						yIndex := getOpcodeNibble(opcode, 2)
+						v[0xF] = 1
+						diff := v[xIndex] - v[yIndex]
+						if diff > v[xIndex] {
+							v[0xF] = 0
+						}
+						v[xIndex] = diff
+
+					case 0x6:								// 8xy6 - SHR Vx {, Vy} (complicated)
+
+					case 0x7: 								// 8xy7 - SUB Vx, Vy (sets V[x] to V[y] - V[x]. V[F] is set to 0 if an underflow occured, else 1)
+						xIndex := getOpcodeNibble(opcode, 1)
+						yIndex := getOpcodeNibble(opcode, 2)
+						v[0xF] = 1
+						diff :=  v[yIndex] - v[xIndex]
+						if diff > v[xIndex] {
+							v[0xF] = 0
+						}
+						v[xIndex] = diff
+					case 0xE:								// 8xyE - SHL Vx {, Vy} (complicated)
+
+				}
+
+			case 0x9:										// 9xy0 - SE Vx, Vy (skip next instruction if V[x] is not equal to V[y])
+				xIndex := getOpcodeNibble(opcode, 1)
+				yIndex := getOpcodeNibble(opcode, 2)
+				if v[xIndex] != v[yIndex] {
+					pc += 2
+				}
+
 		}
-	}
 
-	for pixels := range *inout.GetPixels() {
-		fmt.Println(pixels)
+		// inout.Refresh()
+		// input, err := inout.Listen()
+		// if err != nil && input == 255 {
+		// 	os.Exit(0)
+		// }
 	}
 
 }

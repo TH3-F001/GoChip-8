@@ -4,6 +4,7 @@ go 1.22.6
 
 require (
 	github.com/BurntSushi/toml v1.4.0
+	github.com/TH3-F001/gotoolshed v0.0.0-20240915023219-52304acfd612
 	github.com/gdamore/tcell v1.4.0
 	github.com/veandco/go-sdl2 v0.4.40
 )
