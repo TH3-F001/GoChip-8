@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -34,14 +35,14 @@ type Config struct {
 	CosmacCompatible      bool
 }
 
-var memory [4096]byte = [4096]byte{}
-var stk *stack.Stack[uint16] = stack.New[uint16](16)
-var v [16]byte = [16]byte{} // Variable Registers
-var pc uint16               // Program Counter
-var sp uint16               // Stack Pointer
-var ir uint16               // Index Register
-var dt byte                 // Delay Timer
-var st byte                 // Sound Timer
+var MEM [4096]byte = [4096]byte{}
+var STK *stack.Stack[uint16] = stack.New[uint16](16)
+var V [16]byte = [16]byte{} // Variable Registers
+var PC uint16               // Program Counter
+var SP uint16               // Stack Pointer
+var I uint16                // Index Register
+var DT byte                 // Delay Timer
+var ST byte                 // Sound Timer
 
 // #region Configuration
 func getConfigPath() string {
@@ -146,7 +147,7 @@ func loadDefaultFont(config Config) {
 		fontBytes = append(fontBytes, byte(val))
 	}
 
-	copy(memory[0x50:], fontBytes)
+	copy(MEM[0x50:], fontBytes)
 }
 
 func createIo(conf Config) (io.IO, error) {
@@ -246,15 +247,15 @@ func main() {
 		time.Sleep(delay)
 
 		// Fetch (see docs/visualizations/opcode-fetch.png)
-		opcode := uint16(memory[pc])<<8 | uint16(memory[pc+1])
-		pc += 2
+		opcode := uint16(MEM[PC])<<8 | uint16(MEM[PC+1])
+		PC += 2
 		firstNibble := getOpcodeNibble(opcode, 0)
 
 		// Decode and Execute
 		switch firstNibble {
 		case 0x0:
 			lastByte := getOpcodeByte(opcode, 1)
-			if lastByte == 0xE0 { 						// 00E0 - CLS (clear screen)
+			if lastByte == 0xE0 { // 00E0 - CLS (clear screen)
 				px := *(inout.GetPixels())
 				for i := range px {
 					for j := range (px)[i] {
@@ -262,125 +263,153 @@ func main() {
 					}
 				}
 				inout.Refresh()
-			} else if lastByte == 0xEE { 					// 00EE - RET (pop the top value from stack and set pc to that value )
-				pc, _ = stk.Pop()
+			} else if lastByte == 0xEE { // 00EE - RET (pop the top value from stack and set pc to that value )
+				PC, _ = STK.Pop()
 			}
 
-		case 0x1: 								// 1nnn - JP addr (move pc to address nnn)
-			pc = opcode & 0x0FFF
+		case 0x1: // 1nnn - JP addr (move pc to address nnn)
+			PC = opcode & 0x0FFF
 
-		case 0x2: 								// 2nnn - CALL addr (save pc to stack then set it to nnn)
-			stk.Push(pc)
-			pc = opcode & 0x0FFF
+		case 0x2: // 2nnn - CALL addr (save pc to stack then set it to nnn)
+			STK.Push(PC)
+			PC = opcode & 0x0FFF
 
-		case 0x3: 								// 3xnn - SE Vx, byte (skip next instruction if V[x] is equal to nn)
-			vIndex := getOpcodeNibble(opcode, 1)
+		case 0x3: // 3xnn - SE Vx, byte (skip next instruction if V[x] is equal to nn)
+			x := getOpcodeNibble(opcode, 1)
 			secondByte := getOpcodeByte(opcode, 1)
-			if v[vIndex] == secondByte {
-				pc += 2
+			if V[x] == secondByte {
+				PC += 2
 			}
 
-		case 0x4: 								// 4xnn - SNE Vx, byte (skip next instruction if V[x] is not equal to nn)
-			vIndex := getOpcodeNibble(opcode, 1)
+		case 0x4: // 4xnn - SNE Vx, byte (skip next instruction if V[x] is not equal to nn)
+			x := getOpcodeNibble(opcode, 1)
 			secondByte := getOpcodeByte(opcode, 1)
-			if v[vIndex] != secondByte {
-				pc += 2
+			if V[x] != secondByte {
+				PC += 2
 			}
 
-		case 0x5: 								// 5xy0 - SE Vx, Vy (skip next instruction if V[x] is equal to V[y])
+		case 0x5: // 5xy0 - SE Vx, Vy (skip next instruction if V[x] is equal to V[y])
 			x := getOpcodeNibble(opcode, 1)
 			y := getOpcodeNibble(opcode, 2)
-			if v[x] == v[y] {
-				pc += 2
+			if V[x] == V[y] {
+				PC += 2
 			}
 
-		case 0x6: 								// 6xnn - LD Vx, byte (load the value nn into V[x])
-			vIndex := getOpcodeNibble(opcode, 1)
+		case 0x6: // 6xnn - LD Vx, byte (load the value nn into V[x])
+			x := getOpcodeNibble(opcode, 1)
 			val := getOpcodeByte(opcode, 1)
-			v[vIndex] = val
+			V[x] = val
 
-		case 0x7: 								// 7xnn - ADD Vx, byte (adds the value of nn to value of V[x] and stores it back in to V[x])
-			vIndex := getOpcodeNibble(opcode, 1)
+		case 0x7: // 7xnn - ADD Vx, byte (adds the value of nn to value of V[x] and stores it back in to V[x])
+			x := getOpcodeNibble(opcode, 1)
 			val := getOpcodeByte(opcode, 1)
-			v[vIndex] += val
+			V[x] += val
 
 		case 0x8:
 			lastNibble := getOpcodeNibble(opcode, 3)
 			switch lastNibble {
-			case 0x0: 							// 8xy0 - LD Vx, Vy (loads the value of V[y] into V[x])
+			case 0x0: // 8xy0 - LD Vx, Vy (loads the value of V[y] into V[x])
 				x := getOpcodeNibble(opcode, 1)
 				y := getOpcodeNibble(opcode, 2)
-				v[x] = v[y]
+				V[x] = V[y]
 
-			case 0x1: 							// 8xy1 - OR Vx, Vy (sets V[x] to the result of a binary OR between V[x] and V[y])
+			case 0x1: // 8xy1 - OR Vx, Vy (sets V[x] to the result of a binary OR between V[x] and V[y])
 				x := getOpcodeNibble(opcode, 1)
 				y := getOpcodeNibble(opcode, 2)
-				v[x] = v[x] | v[y]
+				V[x] = V[x] | V[y]
 
-			case 0x2: 							// 8xy2 - AND Vx, Vy (sets V[x] to the result of a binary AND between V[x] and V[y])
+			case 0x2: // 8xy2 - AND Vx, Vy (sets V[x] to the result of a binary AND between V[x] and V[y])
 				x := getOpcodeNibble(opcode, 1)
 				y := getOpcodeNibble(opcode, 2)
-				v[x] = v[x] & v[y]
+				V[x] = V[x] & V[y]
 
-			case 0x3: 							// 8xy3 - XOR Vx, Vy (sets V[x] to the result of a binary XOR between V[x] and V[y])
+			case 0x3: // 8xy3 - XOR Vx, Vy (sets V[x] to the result of a binary XOR between V[x] and V[y])
 				x := getOpcodeNibble(opcode, 1)
 				y := getOpcodeNibble(opcode, 2)
-				v[x] = v[x] ^ v[y]
+				V[x] = V[x] ^ V[y]
 
-			case 0x4: 							// 8xy4 - ADD Vx, Vy (sets V[x] to the value of V[x] + V[y], and sets V[F] to 1 if theres an overflow, else sets it to zero)
+			case 0x4: // 8xy4 - ADD Vx, Vy (sets V[x] to the value of V[x] + V[y], and sets V[F] to 1 if theres an overflow, else sets it to zero)
 				x := getOpcodeNibble(opcode, 1)
 				y := getOpcodeNibble(opcode, 2)
-				sum := v[x] + v[y]
-				if sum < v[x] {
-					v[0xF] = 1
+				sum := V[x] + V[y]
+				if sum < V[x] {
+					V[0xF] = 1
 				} else {
-					v[0xF] = 0
+					V[0xF] = 0
 				}
-				v[x] = sum
-			case 0x5: 							// 8xy5 - SUB Vx, Vy (sets V[x] to V[x] - V[y]. V[F] is set to 0 if an underflow occured, else 1)
+				V[x] = sum
+
+			case 0x5: // 8xy5 - SUB Vx, Vy (sets V[x] to V[x] - V[y]. V[F] is set to 0 if an underflow occured, else 1)
 				x := getOpcodeNibble(opcode, 1)
 				y := getOpcodeNibble(opcode, 2)
-				v[0xF] = 1
-				diff := v[x] - v[y]
-				if diff > v[x] {
-					v[0xF] = 0
+				V[0xF] = 1
+				diff := V[x] - V[y]
+				if diff > V[x] {
+					V[0xF] = 0
 				}
-				v[x] = diff
+				V[x] = diff
 
-			case 0x6: 							// 8xy6 - SHR Vx {, Vy} (if cosmac compatible copy v[y] to v[x]. regardless. shift v[x] right by one bit)
+			case 0x6: // 8xy6 - SHR Vx {, Vy} (if cosmac compatible copy v[y] to v[x]. regardless. shift v[x] right by one bit)
 				x := getOpcodeNibble(opcode, 1)
 				if conf.CosmacCompatible && !conf.SuperChip {
 					y := getOpcodeNibble(opcode, 2)
-					v[x] = v[y]
+					V[x] = V[y]
 				}
-				v[0xF] = (v[x] & 0x1)
-				v[x] = v[x] >> 1
+				V[0xF] = (V[x] & 0x1)
+				V[x] = V[x] >> 1
 
-			case 0x7:							 // 8xy7 - SUB Vx, Vy (sets V[x] to V[y] - V[x]. V[F] is set to 0 if an underflow occured, else 1)
+			case 0x7: // 8xy7 - SUB Vx, Vy (sets V[x] to V[y] - V[x]. V[F] is set to 0 if an underflow occured, else 1)
 				x := getOpcodeNibble(opcode, 1)
 				y := getOpcodeNibble(opcode, 2)
-				v[0xF] = 1
-				diff := v[y] - v[x]
-				if diff > v[x] {
-					v[0xF] = 0
+				V[0xF] = 1
+				diff := V[y] - V[x]
+				if diff > V[x] {
+					V[0xF] = 0
 				}
-				v[x] = diff
-			case 0xE: 							// 8xyE - SHL Vx {, Vy} (if cosmac compatible copy v[y] to v[x]. regardless. shift v[x] left by one bit)
+				V[x] = diff
+
+			case 0xE: // 8xyE - SHL Vx {, Vy} (if cosmac compatible copy v[y] to v[x]. regardless. shift v[x] left by one bit)
 				x := getOpcodeNibble(opcode, 1)
 				if conf.CosmacCompatible && !conf.SuperChip {
 					y := getOpcodeNibble(opcode, 2)
-					v[x] = v[y]
+					V[x] = V[y]
 				}
-				v[0xF] = (v[x] & 0x80) >> 7
-				v[x] = v[x] << 1
+				V[0xF] = (V[x] & 0x80) >> 7
+				V[x] = V[x] << 1
 			}
-
-		case 0x9: 								// 9xy0 - SE Vx, Vy (skip next instruction if V[x] is not equal to V[y])
+		case 0x9: // 9xy0 - SE Vx, Vy (skip next instruction if V[x] is not equal to V[y])
 			x := getOpcodeNibble(opcode, 1)
 			y := getOpcodeNibble(opcode, 2)
-			if v[x] != v[y] {
-				pc += 2
+			if V[x] != V[y] {
+				PC += 2
 			}
+
+		case 0xA: // Annn - LD I, addr (Load the value nnn into register I)
+			I = opcode & 0x0FFF
+
+		case 0xB: // Bnnn/Bxnn - JP V0/Vx, nnn/nn (set PC to nn/nnn plus the value of V0/Vx)
+			if conf.CosmacCompatible && !conf.SuperChip {
+				nnn := opcode & 0x0FFF
+				PC = nnn + uint16(V[0x0])
+			} else {
+				x := getOpcodeNibble(opcode, 1)
+				nn := getOpcodeByte(opcode, 1)
+				PC = uint16(nn) + uint16(V[x])
+			}
+
+		case 0xC: // Cxnn - RND Vx, byte (Set V[x] to "random byte & nn")
+			x := getOpcodeNibble(opcode, 1)
+			nn := getOpcodeByte(opcode, 1)
+			V[x] = byte(rand.Uint32()) & nn
+
+		case 0xD: // Dxyn - DRW Vx, Vy, nibble (big instruction)
+			x := getOpcodeNibble(opcode, 1)
+			y := getOpcodeNibble(opcode, 2)
+			n := getOpcodeNibble(opcode, 3)
+
+			spriteStart := MEM[I]
+			spriteEnd := MEM[I+n]
+
 		}
 
 		// inout.Refresh()
