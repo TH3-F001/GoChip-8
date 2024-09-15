@@ -8,7 +8,7 @@ import (
 )
 
 type SdlIO struct {
-	Pixels [][]bool
+	Pixels [][]byte
 	fg     uint32
 	bg     uint32
 	window *sdl.Window
@@ -29,11 +29,15 @@ func New(width, height byte, fgColor, bgColor uint32) (*SdlIO, error) {
 	return &result, nil
 }
 
-func (io SdlIO) GetPixels() *[][]bool {
+func (io SdlIO) GetPixels() *[][]byte {
 	return &io.Pixels
 }
 
-func (*SdlIO) SetPixel(row, col int, lit bool) error {
+func (io SdlIO) GetPixel(col, row byte) byte {
+	return io.Pixels[row][col]
+}
+
+func (*SdlIO) SetPixel(row, col byte, lit byte) error {
 	return nil
 }
 

@@ -7,7 +7,7 @@ import (
 )
 
 type TcellIO struct {
-	Pixels [][]bool
+	Pixels [][]byte
 	fg     uint32
 	bg     uint32
 	screen tcell.Screen
@@ -33,11 +33,11 @@ func New(width, height byte, fgColor, bgColor uint32) (*TcellIO, error) {
 	}
 
 	// Build Pixels array
-	pxs := make([][]bool, height)
+	pxs := make([][]byte, height)
 	for row := range pxs {
-		pxs[row] = make([]bool, width)
+		pxs[row] = make([]byte, width)
 		for col := byte(0); col < width; col++ {
-			pxs[row][col] = false
+			pxs[row][col] = 0
 		}
 	}
 
@@ -54,19 +54,27 @@ func New(width, height byte, fgColor, bgColor uint32) (*TcellIO, error) {
 	return &tc, nil
 }
 
-func (io TcellIO) GetPixels() *[][]bool {
+func (io TcellIO) GetPixels() *[][]byte {
 	return &io.Pixels
 }
 
-func (io *TcellIO) SetPixel(row, col int, lit bool) error {
+func (io TcellIO) GetPixel(col, row byte) byte {
+	return io.Pixels[row][col]
+}
+
+func (io *TcellIO) SetPixel(row, col byte, lit byte) error {
+	if lit != 0 {
+		lit = 1
+	}
 	io.Pixels[row][col] = lit
+
 	return nil
 }
 
 func (io *TcellIO) Refresh() error {
 	for row := range io.Pixels {
 		for col := range io.Pixels[row] {
-			if !io.Pixels[row][col] {
+			if io.Pixels[row][col] == 0 {
 				io.screen.SetContent(col, row, off, nil, io.style)
 			} else {
 				io.screen.SetContent(col, row, on, nil, io.style)

@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -25,6 +26,9 @@ var embeddedConf embed.FS
 //go:embed fonts/*
 var fonts embed.FS
 
+//go:embed demo/*
+var demoProgs embed.FS
+
 type Config struct {
 	IOType                string
 	DefaultFont           string
@@ -33,6 +37,8 @@ type Config struct {
 	InstructionsPerSecond uint32
 	SuperChip             bool
 	CosmacCompatible      bool
+	VerticalWrapping      bool
+	ProgramPath           string
 }
 
 var MEM [4096]byte = [4096]byte{}
@@ -43,6 +49,9 @@ var SP uint16               // Stack Pointer
 var I uint16                // Index Register
 var DT byte                 // Delay Timer
 var ST byte                 // Sound Timer
+
+var DW byte // Display Width
+var DH byte // Display Height
 
 // #region Configuration
 func getConfigPath() string {
@@ -151,29 +160,28 @@ func loadDefaultFont(config Config) {
 }
 
 func createIo(conf Config) (io.IO, error) {
-	var width, height byte
 	if conf.SuperChip {
-		width = byte(128)
-		height = byte(64)
+		DW = byte(128)
+		DH = byte(64)
 	} else {
-		width = byte(64)
-		height = byte(32)
+		DW = byte(64)
+		DH = byte(32)
 	}
 	var io io.IO
 	var err error
 	switch conf.IOType {
 	case "tcellio", "tcell", "tui":
-		io, err = tcellio.New(width, height, conf.FgColor, conf.BgColor)
+		io, err = tcellio.New(DW, DH, conf.FgColor, conf.BgColor)
 		if err != nil {
 			log.Fatal("Fatal: Failed to Create new TcellIO instance", err)
 		}
 	case "vanilla", "terminal", "term":
-		io, err = vanillaio.New(width, height, conf.FgColor, conf.BgColor)
+		io, err = vanillaio.New(DW, DH, conf.FgColor, conf.BgColor)
 		if err != nil {
 			log.Fatal("Fatal: Failed to Create new VanillaIO instance", err)
 		}
 	case "sdl", "graphical", "gui":
-		io, err = sdlio.New(width, height, conf.FgColor, conf.BgColor)
+		io, err = sdlio.New(DW, DH, conf.FgColor, conf.BgColor)
 		if err != nil {
 			log.Fatal("Fatal: Failed to Create new VanillaIO instance", err)
 		}
@@ -216,6 +224,67 @@ func getOpcodeNibble(opcode uint16, index byte) byte {
 	return 0
 }
 
+func loadProgram(conf Config) {
+	var rawProgramData []byte
+	var err error
+	if conf.ProgramPath == "" {
+		rawProgramData, err = demoProgs.ReadFile("demo/IBM_Logo.ch8")
+		if err != nil {
+			log.Fatal("Fatal: Failed to load default program file: ", err)
+		}
+	}
+	copy(MEM[0x200:], rawProgramData)
+	PC = 0x200
+}
+
+// Configurable functions (to avoid checking conditions on each instruction)
+func getWrappingYDisplayCoord(yStart byte, addedRows byte) byte {
+	return (yStart + addedRows) % DH
+}
+
+func getClippingYDisplayCoord(yStart byte, addedRows byte) byte {
+	return yStart + addedRows
+}
+
+func shiftRClassic(opcode uint16) {
+	x := getOpcodeNibble(opcode, 1)
+	y := getOpcodeNibble(opcode, 2)
+	V[x] = V[y]
+	V[0xF] = (V[x] & 0x1)
+	V[x] = V[x] >> 1
+}
+
+func shiftLClassic(opcode uint16) {
+	x := getOpcodeNibble(opcode, 1)
+	y := getOpcodeNibble(opcode, 2)
+	V[x] = V[y]
+	V[0xF] = (V[x] & 0x80) >> 7
+	V[x] = V[x] << 1
+}
+
+func shiftRSuper(opcode uint16) {
+	x := getOpcodeNibble(opcode, 1)
+	V[0xF] = (V[x] & 0x1)
+	V[x] = V[x] >> 1
+}
+
+func shiftLSuper(opcode uint16) {
+	x := getOpcodeNibble(opcode, 1)
+	V[0xF] = (V[x] & 0x80) >> 7
+	V[x] = V[x] << 1
+}
+
+func classicBJP(opcode uint16) {
+	nnn := opcode & 0x0FFF
+	PC = nnn + uint16(V[0x0])
+}
+
+func superBJP(opcode uint16) {
+	x := getOpcodeNibble(opcode, 1)
+	nn := getOpcodeByte(opcode, 1)
+	PC = uint16(nn) + uint16(V[x])
+}
+
 func main() {
 	var inout io.IO
 	defer func() {
@@ -229,11 +298,32 @@ func main() {
 	conf := loadConfig(confPath)
 	fmt.Println("\t\tSetting instruction Delay...")
 	delay := time.Second / time.Duration(conf.InstructionsPerSecond)
+	fmt.Println("\t\tAssigning Configurable Functions...")
+	var bJP func(opcode uint16) = classicBJP
+	if !conf.CosmacCompatible && conf.SuperChip {
+		bJP = superBJP
+	}
+
+	var rightShift func(opcode uint16) = shiftRClassic
+	var leftShift func(opcode uint16) = shiftLClassic
+	if !conf.CosmacCompatible && conf.SuperChip {
+		rightShift = shiftRSuper
+		leftShift = shiftLSuper
+	}
+
+	var getYCoord func(yStart byte, addedRows byte) byte = getClippingYDisplayCoord
+	if conf.VerticalWrapping {
+		getYCoord = getWrappingYDisplayCoord
+	}
 	fmt.Println("\t\tConfig Loaded.")
 
 	fmt.Println("\tLoading Font...")
 	loadDefaultFont(conf)
 	fmt.Println("\t\tFont Loaded.")
+
+	fmt.Println("\tLoading Program ByteCode Into Memory...")
+	loadProgram(conf)
+	fmt.Println("\t\tProgram Loaded.")
 
 	fmt.Println("Initializing I/O...")
 	inout, err := createIo(conf)
@@ -259,7 +349,7 @@ func main() {
 				px := *(inout.GetPixels())
 				for i := range px {
 					for j := range (px)[i] {
-						inout.SetPixel(j, i, false)
+						inout.SetPixel(byte(j), byte(i), 0)
 					}
 				}
 				inout.Refresh()
@@ -350,13 +440,7 @@ func main() {
 				V[x] = diff
 
 			case 0x6: // 8xy6 - SHR Vx {, Vy} (if cosmac compatible copy v[y] to v[x]. regardless. shift v[x] right by one bit)
-				x := getOpcodeNibble(opcode, 1)
-				if conf.CosmacCompatible && !conf.SuperChip {
-					y := getOpcodeNibble(opcode, 2)
-					V[x] = V[y]
-				}
-				V[0xF] = (V[x] & 0x1)
-				V[x] = V[x] >> 1
+				rightShift(opcode)
 
 			case 0x7: // 8xy7 - SUB Vx, Vy (sets V[x] to V[y] - V[x]. V[F] is set to 0 if an underflow occured, else 1)
 				x := getOpcodeNibble(opcode, 1)
@@ -369,13 +453,7 @@ func main() {
 				V[x] = diff
 
 			case 0xE: // 8xyE - SHL Vx {, Vy} (if cosmac compatible copy v[y] to v[x]. regardless. shift v[x] left by one bit)
-				x := getOpcodeNibble(opcode, 1)
-				if conf.CosmacCompatible && !conf.SuperChip {
-					y := getOpcodeNibble(opcode, 2)
-					V[x] = V[y]
-				}
-				V[0xF] = (V[x] & 0x80) >> 7
-				V[x] = V[x] << 1
+				leftShift(opcode)
 			}
 		case 0x9: // 9xy0 - SE Vx, Vy (skip next instruction if V[x] is not equal to V[y])
 			x := getOpcodeNibble(opcode, 1)
@@ -388,28 +466,38 @@ func main() {
 			I = opcode & 0x0FFF
 
 		case 0xB: // Bnnn/Bxnn - JP V0/Vx, nnn/nn (set PC to nn/nnn plus the value of V0/Vx)
-			if conf.CosmacCompatible && !conf.SuperChip {
-				nnn := opcode & 0x0FFF
-				PC = nnn + uint16(V[0x0])
-			} else {
-				x := getOpcodeNibble(opcode, 1)
-				nn := getOpcodeByte(opcode, 1)
-				PC = uint16(nn) + uint16(V[x])
-			}
+			bJP(opcode)
 
 		case 0xC: // Cxnn - RND Vx, byte (Set V[x] to "random byte & nn")
 			x := getOpcodeNibble(opcode, 1)
 			nn := getOpcodeByte(opcode, 1)
 			V[x] = byte(rand.Uint32()) & nn
 
-		case 0xD: // Dxyn - DRW Vx, Vy, nibble (big instruction)
+		case 0xD: // Dxyn - DRW Vx, Vy, nibble (XOR sprite at Mem[I] to coordinates V[x], V[y] and wrap bytes, not bits)
 			x := getOpcodeNibble(opcode, 1)
 			y := getOpcodeNibble(opcode, 2)
 			n := getOpcodeNibble(opcode, 3)
+			xStart := V[x] & (DW - 1)
+			yStart := V[y] & (DH - 1)
+			V[0xF] = 0
+			for i := 0; i < int(n); i++ { // for each row in the sprite
+				yCoord := getYCoord(yStart, byte(i))
+				if yCoord >= DH {
+					break
+				}
+				spriteRow := MEM[I+uint16(i)]
+				processedBits := math.Min(float64(DW-xStart), 8)
+				for j := processedBits - 1; j >= 0; j-- { // for each bit in the sprite (left to right)
+					xCoord := xStart + byte(j)
+					dspPxl := inout.GetPixel(xCoord, yCoord)
+					spritePxl := (spriteRow >> byte(j)) & 1
+					V[0xF] |= dspPxl & spritePxl
+					newPxl := spritePxl ^ dspPxl
+					inout.SetPixel(xCoord, yCoord, newPxl)
 
-			spriteStart := MEM[I]
-			spriteEnd := MEM[I+n]
-
+				}
+			}
+			inout.Refresh()
 		}
 
 		// inout.Refresh()

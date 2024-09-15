@@ -5,3 +5,4 @@ BgColor = 0x141414
 InstructionsPerSecond = 700
 SuperChip = false
 CosmacCompatible = true
+VerticalWrapping = false

@@ -5,8 +5,9 @@ package io
 // at the end of the day, code doesnt always reflect reality.
 
 type IO interface {
-	GetPixels() *[][]bool
-	SetPixel(int, int, bool) error
+	GetPixels() *[][]byte
+	GetPixel(col byte, row byte) byte
+	SetPixel(col byte, row byte, lit byte) error
 	Refresh() error
 	Listen() (byte, error)
 	Terminate() error
