@@ -11,18 +11,18 @@ type VanillaIO struct {
 	bg     uint32
 }
 
-func New(width, height byte, fgColor, bgColor uint32) (*VanillaIO, error) {
+func New(width, height int, fgColor, bgColor uint32) (*VanillaIO, error) {
 	if width <= 0 || height <= 0 {
 		return &VanillaIO{}, fmt.Errorf("error in ansi/VanillaIO.NewDisplay(): display must be at least 1px wide and 1px tall. supplied size: %dx%d", width, height)
 	}
 
-	if fgColor < 0 || fgColor >= 255 || bgColor < 0 || bgColor >= 255 {
+	if fgColor >= 255 || bgColor >= 255 {
 		return &VanillaIO{}, fmt.Errorf("error in ansi/VanillaIO.NewDisplay(): VanillaIO only supports colors between 0 and 255. supplied colors: fg=%d, bg=%d", fgColor, bgColor)
 	}
 
 	pxs := make([][]byte, height)
 	for i := range pxs {
-		for j := byte(0); j <= width; j++ {
+		for j := 0; j <= width; j++ {
 			pxs[i][j] = 0
 		}
 	}

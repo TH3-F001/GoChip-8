@@ -2,46 +2,59 @@ package tcellio
 
 import (
 	"fmt"
+	"os"
 
-	"github.com/gdamore/tcell"
+	"github.com/gdamore/tcell/v2"
 )
 
+// TcellIO ... Holds state for the active tcellio display. Sh-ould be instantiated using tcellio.New()
+// pixels is a 2-dimensional array of bools representing whether a pixel should be on or off. It's size should be stack once initialized
+// fg and bg are hex values for the display color
+// screen holds the active tcell.Screen instance
+// style holds the tcell.Style instance
+// maxRow and maxCol hold the largest column/row that can be written to. used to limit excessive use of len(pixels) - 1
 type TcellIO struct {
-	Pixels [][]byte
+	pixels [][]bool
 	fg     uint32
 	bg     uint32
 	screen tcell.Screen
 	style  tcell.Style
+	maxRow int
+	maxCol int
 }
 
-// ░▒▓
-const on rune = '▒'
-const off rune = ' '
+// charMap... A simple booleon map of true/false to on/off pixel runes. Used to prevent excessive if statements
+// Suggested pixel characters: ░▒▓
+var charMap map[bool]rune = map[bool]rune{
+	true:  '░',
+	false: ' ',
+}
 
-// tcellio.New() creates a new tcell instance, initializes color and screen size, and returns a TCellio instance
+// New ... Creates a new tcell screen instance, initializes color and screen size, and returns a TCellio instance
 // fg and bg expects colors as hexcodes. red green and blue are split from the hex, and a new tcell color is created
-func New(width, height byte, fgColor, bgColor uint32) (*TcellIO, error) {
-	// Create new TCell screen
+// returns an error if: rows or cols are less or equal to zero, or if screen creation/initialization fails
+func New(rows, cols int, fgColor, bgColor uint32) (*TcellIO, error) {
+	if rows <= 0 || cols <= 0 {
+		return nil, fmt.Errorf("error in tcellio/New(): Width/Height must be more than zero: rows=%v, cols=%v", rows, cols)
+	}
+
 	screen, err := tcell.NewScreen()
 	if err != nil {
-		return &TcellIO{}, fmt.Errorf("error in tcellio/New(): %w", err)
+		return nil, fmt.Errorf("error in tcellio/New(): %w", err)
 	}
 
-	// Initialize the screen
 	if err := screen.Init(); err != nil {
-		return &TcellIO{}, fmt.Errorf("error in tcellio/New(): %w", err)
+		screen.Fini()
+		return nil, fmt.Errorf("error in tcellio/New(): %w", err)
 	}
 
-	// Build Pixels array
-	pxs := make([][]byte, height)
+	pxs := make([][]bool, rows)
 	for row := range pxs {
-		pxs[row] = make([]byte, width)
-		for col := byte(0); col < width; col++ {
-			pxs[row][col] = 0
+		pxs[row] = make([]bool, cols)
+		for col := range pxs[row] {
+			pxs[row][col] = false
 		}
 	}
-
-	// Set up colors
 
 	fg := tcell.NewHexColor(int32(fgColor))
 	bg := tcell.NewHexColor(int32(bgColor))
@@ -49,53 +62,70 @@ func New(width, height byte, fgColor, bgColor uint32) (*TcellIO, error) {
 	style := tcell.StyleDefault.Background(bg).Foreground(fg)
 	screen.SetStyle(style)
 
-	tc := TcellIO{pxs, fgColor, bgColor, screen, style}
+	tc := TcellIO{
+		pixels: pxs,
+		fg:     fgColor,
+		bg:     bgColor,
+		screen: screen,
+		style:  style,
+		maxRow: rows - 1,
+		maxCol: cols - 1,
+	}
 
 	return &tc, nil
 }
 
-func (io TcellIO) GetPixels() *[][]byte {
-	return &io.Pixels
+// GetMaxRow ... Returns the highest pixels row that can be written to (if len(pixels[row] is 32, then maxCol is 31).
+func (io TcellIO) GetMaxRow() int {
+	return io.maxRow
 }
 
-func (io TcellIO) GetPixel(col, row byte) byte {
-	return io.Pixels[row][col]
+// GetMaxCol ... Returns the highest pixels column that can be written to (if len(pixels[row] is 32, then maxCol is 31).
+func (io TcellIO) GetMaxCol() int {
+	return io.maxCol
 }
 
-func (io *TcellIO) SetPixel(row, col byte, lit byte) error {
-	if lit != 0 {
-		lit = 1
+// GetPixels ... Returns a copy of the TcellIO.pixels 'array' (slice)
+func (io TcellIO) GetPixels() [][]bool {
+	return io.pixels
+}
+
+// GetPixel ... Returns true if the pixel at the given cell in the pixels array is on, false if it's off, and an error if out of bounds
+func (io TcellIO) GetPixel(row, col int) (bool, error) {
+	if row < 0 || row > io.maxRow || col < 0 || col > io.maxCol {
+		return false, fmt.Errorf("out of bounds request to TcellIO.GetPixel() . request to get pixel at (row:%d, col:%d) is out of bounds. max coordinates: (row:%d, col:%d)", row, col, io.maxRow, io.maxCol)
 	}
-	io.Pixels[row][col] = lit
+	return io.pixels[row][col], nil
+}
+
+// SetPixel ... Sets the pixel at a given row and column to either on or off. returns an error if out of bounds
+func (io *TcellIO) SetPixel(row, col int, lit bool) error {
+	if row > io.maxRow || row < 0 || col > io.maxCol || col < 0 {
+		return fmt.Errorf("overflow detected in TcellIO.SetPixel(). request to set (row:%d, col:%d) to %v is out of bounds. max coordinates: (row:%d, col:%d)", row, col, lit, io.maxRow, io.maxCol)
+	}
+	io.pixels[row][col] = lit
 
 	return nil
 }
 
+// Refresh ...Iterates over the display's array of pixels, and updates the display to match the array. error is only to conform to the IO interface and isnt used
 func (io *TcellIO) Refresh() error {
-	for row := range io.Pixels {
-		for col := range io.Pixels[row] {
-			if io.Pixels[row][col] == 0 {
-				io.screen.SetContent(col, row, off, nil, io.style)
-			} else {
-				io.screen.SetContent(col, row, on, nil, io.style)
-			}
+	for row := range io.pixels {
+		for col := range io.pixels[row] {
+			io.screen.SetContent(col, row, charMap[io.pixels[row][col]], nil, io.style)
 		}
 	}
 	io.screen.Show()
-	return nil
+	return nil // Satisfies the interface
 }
 
+// Listen ... listens for the traditonal Chip8 keypresses eturns the corresponding hex code and forwards any errors.
 func (io TcellIO) Listen() (byte, error) {
 	event := io.screen.PollEvent()
 	switch event := event.(type) {
 	case *tcell.EventResize:
 		io.screen.Sync()
 	case *tcell.EventKey:
-		//
-		if event.Key() == tcell.KeyEscape || event.Key() == tcell.KeyCtrlC {
-			io.Terminate()
-			return 255, fmt.Errorf("exited due to user keyboard interupt")
-		}
 		switch event.Rune() {
 		case '1':
 			return 0x1, nil
@@ -135,7 +165,22 @@ func (io TcellIO) Listen() (byte, error) {
 	return 0x0a, nil
 }
 
-func (io *TcellIO) Terminate() error {
+// ListenForTermination ... Specifically listens for user interupts to terminate the program. (meant to be run concurrently)
+func (io TcellIO) ListenForTermination() {
+	event := io.screen.PollEvent()
+	switch event := event.(type) {
+	case *tcell.EventKey:
+		if event.Key() == tcell.KeyEscape || event.Key() == tcell.KeyCtrlC {
+			io.Terminate()
+		}
+	default:
+		return
+	}
+}
+
+// Terminate ... Clears the screen, destroys it, and exits the program
+func (io *TcellIO) Terminate() {
+	io.screen.Clear()
 	io.screen.Fini()
-	return nil
+	os.Exit(1)
 }

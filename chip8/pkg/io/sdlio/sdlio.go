@@ -14,7 +14,7 @@ type SdlIO struct {
 	window *sdl.Window
 }
 
-func New(width, height byte, fgColor, bgColor uint32) (*SdlIO, error) {
+func New(width, height int, fgColor, bgColor uint32) (*SdlIO, error) {
 	result := SdlIO{}
 	if err := sdl.Init(uint32(sdl.INIT_EVERYTHING)); err != nil {
 		return &result, err

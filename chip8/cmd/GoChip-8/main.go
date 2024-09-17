@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -50,8 +50,10 @@ var I uint16                // Index Register
 var DT byte                 // Delay Timer
 var ST byte                 // Sound Timer
 
-var DW byte // Display Width
-var DH byte // Display Height
+var DW int // Display Width
+var DH int // Display Height
+var DWbyte byte
+var DHbyte byte
 
 // #region Configuration
 func getConfigPath() string {
@@ -115,7 +117,7 @@ func loadConfig(path string) Config {
 
 // #region Initialization
 func loadDefaultFont(config Config) {
-	rawFontData := make([]byte, 0)
+	var rawFontData []byte
 	var err error = nil
 	switch config.DefaultFont {
 	case "chip48":
@@ -161,29 +163,31 @@ func loadDefaultFont(config Config) {
 
 func createIo(conf Config) (io.IO, error) {
 	if conf.SuperChip {
-		DW = byte(128)
-		DH = byte(64)
+		DW = 128
+		DH = 64
 	} else {
-		DW = byte(64)
-		DH = byte(32)
+		DW = 64
+		DH = 32
 	}
+	DHbyte = byte(DH)
+	DWbyte = byte(DW)
 	var io io.IO
 	var err error
 	switch conf.IOType {
 	case "tcellio", "tcell", "tui":
 		io, err = tcellio.New(DW, DH, conf.FgColor, conf.BgColor)
 		if err != nil {
-			log.Fatal("Fatal: Failed to Create new TcellIO instance", err)
+			log.Fatal("Fatal: Failed to Create new TcellIO instance: ", err)
 		}
 	case "vanilla", "terminal", "term":
 		io, err = vanillaio.New(DW, DH, conf.FgColor, conf.BgColor)
 		if err != nil {
-			log.Fatal("Fatal: Failed to Create new VanillaIO instance", err)
+			log.Fatal("Fatal: Failed to Create new VanillaIO instance: ", err)
 		}
 	case "sdl", "graphical", "gui":
 		io, err = sdlio.New(DW, DH, conf.FgColor, conf.BgColor)
 		if err != nil {
-			log.Fatal("Fatal: Failed to Create new VanillaIO instance", err)
+			log.Fatal("Fatal: Failed to Create new VanillaIO instance: ", err)
 		}
 
 	default:
@@ -228,7 +232,7 @@ func loadProgram(conf Config) {
 	var rawProgramData []byte
 	var err error
 	if conf.ProgramPath == "" {
-		rawProgramData, err = demoProgs.ReadFile("demo/IBM_Logo.ch8")
+		rawProgramData, err = demoProgs.ReadFile("demo/test_opcode.ch8")
 		if err != nil {
 			log.Fatal("Fatal: Failed to load default program file: ", err)
 		}
@@ -238,11 +242,11 @@ func loadProgram(conf Config) {
 }
 
 // Configurable functions (to avoid checking conditions on each instruction)
-func getWrappingYDisplayCoord(yStart byte, addedRows byte) byte {
-	return (yStart + addedRows) % DH
+func getWrappingYDisplayCoord(yStart, addedRows int) int {
+	return (yStart + addedRows) % int(DHbyte)
 }
 
-func getClippingYDisplayCoord(yStart byte, addedRows byte) byte {
+func getClippingYDisplayCoord(yStart, addedRows int) int {
 	return yStart + addedRows
 }
 
@@ -311,7 +315,7 @@ func main() {
 		leftShift = shiftLSuper
 	}
 
-	var getYCoord func(yStart byte, addedRows byte) byte = getClippingYDisplayCoord
+	var getYCoord func(yStart int, addedRows int) int = getClippingYDisplayCoord
 	if conf.VerticalWrapping {
 		getYCoord = getWrappingYDisplayCoord
 	}
@@ -325,17 +329,21 @@ func main() {
 	loadProgram(conf)
 	fmt.Println("\t\tProgram Loaded.")
 
-	fmt.Println("Initializing I/O...")
+	fmt.Println("\tInitializing I/O...")
 	inout, err := createIo(conf)
+	fmt.Println(inout)
 	if err != nil {
-		log.Fatal("Fatal: Failed to create IO instance")
+		fmt.Println("\t\tIO Initialized.")
+		log.Fatal("\t\tFatal: Failed to create IO instance")
 	}
+	fmt.Println("\t\tIO Initialized.")
+	fmt.Println(&delay, &bJP, &rightShift, &leftShift, &getYCoord)
 
 	// Main Loop
 	for {
 		// Delay execution to mimic instructions per second
 		time.Sleep(delay)
-
+		inout.Listen()
 		// Fetch (see docs/visualizations/opcode-fetch.png)
 		opcode := uint16(MEM[PC])<<8 | uint16(MEM[PC+1])
 		PC += 2
@@ -346,10 +354,10 @@ func main() {
 		case 0x0:
 			lastByte := getOpcodeByte(opcode, 1)
 			if lastByte == 0xE0 { // 00E0 - CLS (clear screen)
-				px := *(inout.GetPixels())
-				for i := range px {
-					for j := range (px)[i] {
-						inout.SetPixel(byte(j), byte(i), 0)
+				px := inout.GetPixels()
+				for row := range px {
+					for col := range px[row] {
+						inout.SetPixel(col, row, false)
 					}
 				}
 				inout.Refresh()
@@ -477,18 +485,18 @@ func main() {
 			x := getOpcodeNibble(opcode, 1)
 			y := getOpcodeNibble(opcode, 2)
 			n := getOpcodeNibble(opcode, 3)
-			xStart := V[x] & (DW - 1)
-			yStart := V[y] & (DH - 1)
+			xStart := V[x] & (DWbyte - 1)
+			yStart := V[y] & (DHbyte - 1)
 			V[0xF] = 0
 			for i := 0; i < int(n); i++ { // for each row in the sprite
-				yCoord := getYCoord(yStart, byte(i))
-				if yCoord >= DH {
+				yCoord := getYCoord(yStart, i)
+				if yCoord >= DHbyte {
 					break
 				}
 				spriteRow := MEM[I+uint16(i)]
-				processedBits := math.Min(float64(DW-xStart), 8)
+				processedBits := int(math.Min(float64(DWbyte-xStart), 8))
 				for j := processedBits - 1; j >= 0; j-- { // for each bit in the sprite (left to right)
-					xCoord := xStart + byte(j)
+					xCoord := int(xStart) + j
 					dspPxl := inout.GetPixel(xCoord, yCoord)
 					spritePxl := (spriteRow >> byte(j)) & 1
 					V[0xF] |= dspPxl & spritePxl
