@@ -14,7 +14,7 @@ type IO interface {
 	GetMaxCol() int
 
 	// GetPixels ... returns a copy of the display's pixel array
-	GetPixels() [][]byte
+	GetPixels() [][]bool
 
 	// GetPixel ... Returns true if the pixel at the given cell in the pixels array is on, false if it's off, and an error if out of bounds
 	GetPixel(row, col int) (bool, error)
@@ -29,8 +29,8 @@ type IO interface {
 	Listen() (byte, error)
 
 	// ListenForTermination ... Specifically listens for user interupts to terminate the program. (meant to be run concurrently)
-	ListenForTermination()
+	ListenForTermination(termCh chan<- bool)
 
 	// Terminate ... Clears the screen, destroys it, and exits the program
-	Terminate() error
+	Terminate()
 }

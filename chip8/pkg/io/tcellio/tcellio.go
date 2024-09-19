@@ -166,16 +166,19 @@ func (io TcellIO) Listen() (byte, error) {
 }
 
 // ListenForTermination ... Specifically listens for user interupts to terminate the program. (meant to be run concurrently)
-func (io TcellIO) ListenForTermination() {
-	event := io.screen.PollEvent()
-	switch event := event.(type) {
-	case *tcell.EventKey:
-		if event.Key() == tcell.KeyEscape || event.Key() == tcell.KeyCtrlC {
-			io.Terminate()
+func (io TcellIO) ListenForTermination(termCh chan<- bool) {
+	go func() {
+		for {
+			event := io.screen.PollEvent()
+			switch event := event.(type) {
+			case *tcell.EventKey:
+				if event.Key() == tcell.KeyEscape || event.Key() == tcell.KeyCtrlC {
+					termCh <- true
+					return // Exit the goroutine when termination key is pressed
+				}
+			}
 		}
-	default:
-		return
-	}
+	}()
 }
 
 // Terminate ... Clears the screen, destroys it, and exits the program
