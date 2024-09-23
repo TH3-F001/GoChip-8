@@ -3,6 +3,7 @@ package tcellio
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 )
@@ -119,8 +120,8 @@ func (io *TcellIO) Refresh() error {
 	return nil // Satisfies the interface
 }
 
-// Listen ... listens for the traditonal Chip8 keypresses eturns the corresponding hex code and forwards any errors.
-func (io TcellIO) Listen() (byte, error) {
+// ListenWait ... waits and listens for the traditonal Chip8 keypresses eturns the corresponding hex code and forwards any errors.
+func (io TcellIO) ListenWait() (byte, error) {
 	event := io.screen.PollEvent()
 	switch event := event.(type) {
 	case *tcell.EventResize:
@@ -162,11 +163,67 @@ func (io TcellIO) Listen() (byte, error) {
 
 		}
 	}
-	return 0x0a, nil
+	return 255, nil
 }
 
-// ListenForTermination ... Specifically listens for user interupts to terminate the program. (meant to be run concurrently)
-func (io TcellIO) ListenForTermination(termCh chan<- bool) {
+// ListenNow ... listens for currently pressed Chip8 keypresses, returns the corresponding hex code and forwards any errors.
+func (io TcellIO) ListenNow() (byte, error) {
+	events := make(chan tcell.Event)
+	defer close(events)
+
+	go func() {
+		for {
+			events <- io.screen.PollEvent()
+		}
+	}()
+
+	select {
+	case event := <-events:
+		if key, ok := event.(*tcell.EventKey); ok {
+			switch key.Rune() {
+			case '1':
+				return 0x1, nil
+			case '2':
+				return 0x2, nil
+			case '3':
+				return 0x3, nil
+			case '4':
+				return 0xC, nil
+			case 'q':
+				return 0x4, nil
+			case 'w':
+				return 0x5, nil
+			case 'e':
+				return 0x6, nil
+			case 'r':
+				return 0xD, nil
+			case 'a':
+				return 0x7, nil
+			case 's':
+				return 0x8, nil
+			case 'd':
+				return 0x9, nil
+			case 'f':
+				return 0xE, nil
+			case 'z':
+				return 0xA, nil
+			case 'x':
+				return 0x0, nil
+			case 'c':
+				return 0xB, nil
+			case 'v':
+				return 0xF, nil
+			}
+		}
+	case <-time.After(10 * time.Millisecond):
+		return 255, nil
+	}
+
+	return 255, nil
+}
+
+// ListenForControl ... Specifically listens for user interupts to terminate the program. (meant to be run concurrently)
+func (io TcellIO) ListenForControl(termCh chan<- bool) {
 	go func() {
 		for {
 			event := io.screen.PollEvent()
@@ -179,6 +236,10 @@ func (io TcellIO) ListenForTermination(termCh chan<- bool) {
 			}
 		}
 	}()
+}
+
+func Beep() {
+	print("Making my own library")
 }
 
 // Terminate ... Clears the screen, destroys it, and exits the program

@@ -11,13 +11,13 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/TH3-F001/GoChip-8/chip8/pkg/chip8"
-	"github.com/TH3-F001/GoChip-8/chip8/pkg/config"
-	"github.com/TH3-F001/GoChip-8/chip8/pkg/io"
+	"github.com/TH3-F001/GoChip-8/chip8/internal/chip8"
+	"github.com/TH3-F001/GoChip-8/chip8/internal/config"
+	"github.com/TH3-F001/GoChip-8/chip8/internal/io"
 
-	// "github.com/TH3-F001/GoChip-8/chip8/pkg/io/sdlio"
-	"github.com/TH3-F001/GoChip-8/chip8/pkg/io/tcellio"
-	// "github.com/TH3-F001/GoChip-8/chip8/pkg/io/vanillaio"
+	// "github.com/TH3-F001/GoChip-8/chip8/internal/io/sdlio"
+	"github.com/TH3-F001/GoChip-8/chip8/internal/io/tcellio"
+	// "github.com/TH3-F001/GoChip-8/chip8/internal/io/vanillaio"
 )
 
 //go:embed config/chip8.toml
@@ -142,7 +142,7 @@ func getProgram(conf config.Config) []byte {
 	var rawProgramData []byte
 	var err error
 	if conf.ProgramPath == "" {
-		rawProgramData, err = demoProgs.ReadFile("demo/heart_monitor.ch8")
+		rawProgramData, err = demoProgs.ReadFile("demo/IBM_Logo.ch8")
 		if err != nil {
 			log.Fatal("Fatal: Failed to load default program file: ", err)
 		}
@@ -183,7 +183,7 @@ func createIo(conf config.Config) (io.IO, byte, byte, error) {
 	default:
 		log.Fatal("Fatal: Failed to Create new IO instance: Invalid ioType: ", conf.IOType)
 	}
-	io.ListenForTermination(terminationCh)
+	io.ListenForControl(terminationCh)
 	return io, byte(dh), byte(dw), nil
 }
 
@@ -192,12 +192,7 @@ func createIo(conf config.Config) (io.IO, byte, byte, error) {
 func main() {
 	var inout io.IO
 
-	defer func() {
-		fmt.Println("C U Next Time!")
-		inout.Terminate()
-	}()
 	fmt.Println("Initializing GoChip-8...")
-
 	fmt.Println("\tLoading Config...")
 	confPath := getConfigPath()
 	fmt.Println("\t\tFound configuration at:", confPath)
@@ -207,7 +202,7 @@ func main() {
 	fmt.Println("\t\tConfig Loaded.")
 
 	fmt.Println("\tInitializing I/O...")
-	inout, dh, dw,  err := createIo(conf)
+	inout, dh, dw, err := createIo(conf)
 	if err != nil {
 		log.Fatal("\t\tFatal: Failed to create IO instance")
 	}
@@ -217,6 +212,12 @@ func main() {
 	font := getDefaultFont(conf)
 	program := getProgram(conf)
 	chip := chip8.New(conf, inout, program, font, dh, dw)
+
+	defer func() {
+		fmt.Println("C\nU\nNext\nTime!")
+		chip.Terminate()
+		inout.Terminate()
+	}()
 
 	active := true
 	// Main Loop

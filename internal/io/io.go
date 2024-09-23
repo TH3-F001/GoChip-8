@@ -25,11 +25,14 @@ type IO interface {
 	// Refresh ... Iterates over the display's array of pixels, and updates the display to match the array. and forwards any errors
 	Refresh() error
 
-	// Listen ... listens for the traditonal Chip8 keypresses eturns the corresponding hex code and forwards any errors. (run concurrently for no blockers, else run vanilla)
-	Listen() (byte, error)
+	// ListenWait ... Listens for the traditonal Chip8 keypresses eturns the corresponding hex code and forwards any errors. (run concurrently for no blockers, else run vanilla)
+	ListenWait() (byte, error)
+
+	// ListenNow ... Listens for currently Chip8 keypresses returns the corresponding hex code and forwards any errors.
+	ListenNow() (byte, error)
 
 	// ListenForTermination ... Specifically listens for user interupts to terminate the program. (meant to be run concurrently)
-	ListenForTermination(termCh chan<- bool)
+	ListenForControl(termCh chan<- bool)
 
 	// Terminate ... Clears the screen, destroys it, and exits the program
 	Terminate()
