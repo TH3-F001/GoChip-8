@@ -3,6 +3,5 @@ DefaultFont = "chip48"
 FgColor = 0xFFB000
 BgColor = 0x141414
 InstructionsPerSecond = 700
-SuperChip = false
 CosmacCompatible = true
 VerticalWrapping = false
